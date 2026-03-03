@@ -203,23 +203,48 @@ def _save_to_database(
     if state_df is not None and not state_df.empty:
         state_insert = state_df.copy()
         state_insert["sat_no"] = pd.to_numeric(state_insert.get("satNo"), errors="coerce").astype("Int64")
-        coord_map = {
-            "x": "x_pos",
-            "y": "y_pos",
-            "z": "z_pos",
-            "xDot": "x_vel",
-            "yDot": "y_vel",
-            "zDot": "z_vel",
-            "source": "source",
-            "dataMode": "data_mode",
+        alias_map = {
+            "x_pos": ["x_pos", "xPos", "xpos", "x", "pos_x"],
+            "y_pos": ["y_pos", "yPos", "ypos", "y", "pos_y"],
+            "z_pos": ["z_pos", "zPos", "zpos", "z", "pos_z"],
+            "x_vel": ["x_vel", "xVel", "xvel", "xDot", "xdot", "vx", "vel_x"],
+            "y_vel": ["y_vel", "yVel", "yvel", "yDot", "ydot", "vy", "vel_y"],
+            "z_vel": ["z_vel", "zVel", "zvel", "zDot", "zdot", "vz", "vel_z"],
+            "source": ["source"],
+            "data_mode": ["data_mode", "dataMode"],
         }
-        for src, dst in coord_map.items():
-            if src in state_insert.columns and dst not in state_insert.columns:
-                state_insert[dst] = state_insert[src]
+        for dst, candidates in alias_map.items():
+            resolved = None
+            for src in candidates:
+                if src in state_insert.columns:
+                    series = state_insert[src]
+                    resolved = series if resolved is None else resolved.fillna(series)
+            if resolved is not None:
+                if dst in state_insert.columns:
+                    state_insert[dst] = state_insert[dst].fillna(resolved)
+                else:
+                    state_insert[dst] = resolved
         state_insert["epoch"] = pd.to_datetime(state_insert["epoch"], errors="coerce")
+        for col in ["x_pos", "y_pos", "z_pos", "x_vel", "y_vel", "z_vel"]:
+            if col in state_insert.columns:
+                state_insert[col] = pd.to_numeric(state_insert[col], errors="coerce")
         state_insert["source"] = state_insert.get("source", "UDL")
         state_insert["data_mode"] = state_insert.get("data_mode", "REAL")
-        db.state_vectors.bulk_insert(state_insert)
+        required_cols = ["sat_no", "epoch", "x_pos", "y_pos", "z_pos", "x_vel", "y_vel", "z_vel"]
+        missing_required = [c for c in required_cols if c not in state_insert.columns]
+        if missing_required:
+            logger.warning(
+                "Skipping state vector persistence; missing required columns after normalization: "
+                f"{missing_required}"
+            )
+        else:
+            state_insert = state_insert.dropna(subset=required_cols)
+            if state_insert.empty:
+                logger.warning(
+                    "Skipping state vector persistence; no rows with complete position and velocity data."
+                )
+            else:
+                db.state_vectors.bulk_insert(state_insert)
 
     if elset_df is not None and not elset_df.empty and {"line1", "line2"}.issubset(elset_df.columns):
         elset_insert = elset_df.copy()
