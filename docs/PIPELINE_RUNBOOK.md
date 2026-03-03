@@ -16,11 +16,11 @@ The examples below use the `scripts/run_pipeline_demo.py` entry point because it
 
 Use this runbook for execution. Use the linked docs below when you need deeper detail on a specific part of the workflow:
 
-- [Documentation Index](/home/joey/jzouca_UCTBench_minimal/docs/README.md)
-- [Pipeline System Guide](/home/joey/jzouca_UCTBench_minimal/docs/PIPELINE_SYSTEM_GUIDE.md)
-- [Missingness, Preprocessing, and Simulation](/home/joey/jzouca_UCTBench_minimal/docs/MISSINGNESS_PREPROCESSING_AND_SIMULATION.md)
-- [Result Artifacts Guide](/home/joey/jzouca_UCTBench_minimal/docs/RESULT_ARTIFACTS_GUIDE.md)
-- [Outputs and Database Inspection](/home/joey/jzouca_UCTBench_minimal/docs/OUTPUTS_AND_DATABASE_INSPECTION.md)
+- [Documentation Index](README.md)
+- [Pipeline System Guide](PIPELINE_SYSTEM_GUIDE.md)
+- [Missingness, Preprocessing, and Simulation](MISSINGNESS_PREPROCESSING_AND_SIMULATION.md)
+- [Result Artifacts Guide](RESULT_ARTIFACTS_GUIDE.md)
+- [Outputs and Database Inspection](OUTPUTS_AND_DATABASE_INSPECTION.md)
 
 ## What the Demo Runner Does
 

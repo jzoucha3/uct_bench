@@ -12,12 +12,12 @@ This repository supports:
 
 ## Documentation
 
-- [Documentation Index](/home/joey/jzouca_UCTBench_minimal/docs/README.md)
-- [Pipeline Runbook](/home/joey/jzouca_UCTBench_minimal/docs/PIPELINE_RUNBOOK.md)
-- [Pipeline System Guide](/home/joey/jzouca_UCTBench_minimal/docs/PIPELINE_SYSTEM_GUIDE.md)
-- [Missingness, Preprocessing, and Simulation](/home/joey/jzouca_UCTBench_minimal/docs/MISSINGNESS_PREPROCESSING_AND_SIMULATION.md)
-- [Result Artifacts Guide](/home/joey/jzouca_UCTBench_minimal/docs/RESULT_ARTIFACTS_GUIDE.md)
-- [Outputs and Database Inspection](/home/joey/jzouca_UCTBench_minimal/docs/OUTPUTS_AND_DATABASE_INSPECTION.md)
+- [Documentation Index](docs/README.md)
+- [Pipeline Runbook](docs/PIPELINE_RUNBOOK.md)
+- [Pipeline System Guide](docs/PIPELINE_SYSTEM_GUIDE.md)
+- [Missingness, Preprocessing, and Simulation](docs/MISSINGNESS_PREPROCESSING_AND_SIMULATION.md)
+- [Result Artifacts Guide](docs/RESULT_ARTIFACTS_GUIDE.md)
+- [Outputs and Database Inspection](docs/OUTPUTS_AND_DATABASE_INSPECTION.md)
 
 Use the documentation index as the landing page for the docs set.
 Use the runbook for setup and terminal execution. Use the system guide for architecture and pipeline-stage behavior.
@@ -54,6 +54,14 @@ UDL_TOKEN=your_real_udl_token
 OREKIT_DATA_PATH=./orekit-data-main
 DATABASE_BACKEND=duckdb
 ```
+
+What these values mean:
+
+- `UDL_TOKEN` must be replaced with your real UDL API token. This is not a placeholder the app can auto-fill.
+- `OREKIT_DATA_PATH=./orekit-data-main` should point to a directory on disk containing the Orekit data files. In this repository, `orekit-data-main/` is already included, so if you cloned the repo normally you usually do not need to unzip or download anything else. Keep this value as-is unless your Orekit data lives somewhere else.
+- If your local copy does not contain `orekit-data-main/`, then download or extract the Orekit data bundle yourself and set `OREKIT_DATA_PATH` to that extracted folder. The value must be the path to the folder itself, not the `.zip` file.
+- `DATABASE_BACKEND=duckdb` is the actual value to use for a simple local setup. It tells the app to use the built-in local DuckDB backend.
+- Only change `DATABASE_BACKEND` if you intentionally want PostgreSQL/Supabase instead. In that case, set `DATABASE_BACKEND=postgres` and also provide `DATABASE_URL=...`.
 
 Run a dry check:
 
