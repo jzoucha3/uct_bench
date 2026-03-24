@@ -159,6 +159,8 @@ def _build_obs_from_statevectors(state_df: pd.DataFrame) -> pd.DataFrame:
     )
     obs_df = obs_df.dropna(subset=["satNo", "obTime"]).reset_index(drop=True)
     obs_df["satNo"] = obs_df["satNo"].astype(int)
+    # Add an 'id' column which is expected by downstream operations like downsampling
+    obs_df["id"] = obs_df.index.astype(str)
     return obs_df
 
 
@@ -324,6 +326,8 @@ def execute_statevector_first_pipeline(
         report=inspection_report,
     )
 
+    elset_truth = _fetch_current_elsets(udl_token, sorted(obs_truth["satNo"].unique().tolist()), dt=dt)
+
     downsample_config, simulation_config = _build_tier_configs(
         tier=tier,
         downsampling=config.get("downsampling"),
@@ -342,7 +346,7 @@ def execute_statevector_first_pipeline(
         obs_truth, downsampling_metadata = apply_downsampling(
             obs_truth,
             sat_params={},
-            elset_data=None,
+            elset_data=elset_truth,
             config=ds_cfg,
             tier=tier,
         )
@@ -371,7 +375,6 @@ def execute_statevector_first_pipeline(
         sim_auto = True
 
     simulation_metadata = None
-    elset_truth = _fetch_current_elsets(udl_token, sorted(obs_truth["satNo"].unique().tolist()), dt=dt)
     if simulation_config and simulation_config.get("enabled"):
         sensor_df = pd.DataFrame(
             {
