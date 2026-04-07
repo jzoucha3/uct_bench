@@ -877,7 +877,7 @@ def _downsampleAbsolute(ref_obs, sat_params, objp, obs_max, rand, rng, chosen_sa
             sampled = time_sorted.groupby("time_bin", group_keys=False, observed=True).apply(
                 lambda g: g.sample(
                     n=min(int(target_per_bin[g.name]), len(g)),
-                    weights=g["weight"],
+                    # weights=g["weight"],
                     random_state=rand,
                 )
             )
@@ -892,7 +892,7 @@ def _downsampleAbsolute(ref_obs, sat_params, objp, obs_max, rand, rng, chosen_sa
     ref_obs = pd.concat(keep_obs + [skipped_obs]).reset_index(drop=True)
 
     # Remove sample column
-    ref_obs = ref_obs.drop("time_bin", axis=1)
+    ref_obs = ref_obs.drop("time_bin", axis=1, errors="ignore")
 
     return ref_obs
 
