@@ -784,11 +784,14 @@ def _downsampleAbsolute(ref_obs, sat_params, objp, obs_max, rand, rng, chosen_sa
 
     # Satellites already below or equal to obs_max stay as is
     already_low_sats = [sat for sat, count in sat_obs_counts.items() if count <= obs_max]
+    
+    logger.info(f"[DOWNSAMPLE-ABS] {len(already_low_sats)}/{len(satIDs)} satellites already below max obs threshold ({obs_max}).")
 
     # End early if min reached
     initial_fraction = len(already_low_sats) / len(satIDs)
 
     if initial_fraction >= objp[0]:
+        logger.info(f"[DOWNSAMPLE-ABS] Initial fraction {initial_fraction:.2f} >= min target {objp[0]:.2f}. Skipping further downsampling.")
         return ref_obs
 
     # Candidates for downsampling (still above threshold)
@@ -797,12 +800,17 @@ def _downsampleAbsolute(ref_obs, sat_params, objp, obs_max, rand, rng, chosen_sa
     # Compute how many we still need to downsample
     total_target = int(np.ceil(objp[2] * len(satIDs)))
     remaining_needed = max(0, total_target - len(already_low_sats))
+    
+    logger.info(f"[DOWNSAMPLE-ABS] Need to downsample {remaining_needed} more satellites to reach target {objp[2]:.2f} ({total_target} total).")
 
     # Sort the remaining sats by *fewest obs first*
     remaining_sats_sorted = sorted(remaining_sats, key=lambda s: sat_obs_counts[s])
 
     # Pick the lowest-count ones
     sampled_sats = remaining_sats_sorted[:remaining_needed]
+    
+    if sampled_sats:
+        logger.info(f"[DOWNSAMPLE-ABS] Selected {len(sampled_sats)} satellites for downsampling.")
 
     # Union with already-low sats (which won't actually be downsampled)
     sampled_satID_set = set(sampled_sats + already_low_sats)
@@ -975,18 +983,30 @@ def _lowerOrbitCoverage(ref_obs, sat_params, objp, coveragep, rng, chosen_sats=N
     high_coverage_sats = coverage_series[coverage_series > coveragep[0]].index
 
     total_sat_count = len(satIDs)
+    
+    logger.info(f"[DOWNSAMPLE-COV] {len(low_coverage_sats)}/{total_sat_count} satellites already below coverage threshold ({coveragep[0]:.2f}).")
+    logger.info("[DOWNSAMPLE-COV] Low coverage sats:")
+    for _sat in low_coverage_sats:
+        logger.info(f"[DOWNSAMPLE-COV]   sat {_sat}: coverage={coverages[_sat]:.4f}")
+
+    logger.info("[DOWNSAMPLE-COV] High coverage sats:")
+    for _sat in high_coverage_sats:
+        logger.info(f"[DOWNSAMPLE-COV]   sat {_sat}: coverage={coverages[_sat]:.4f}")
 
     # Return without change if already meets requirements
     min_required = int(np.ceil(objp[0] * total_sat_count))
     target_required = int(np.ceil(objp[2] * total_sat_count))
 
     if len(low_coverage_sats) >= min_required:
+        logger.info(f"[DOWNSAMPLE-COV] {len(low_coverage_sats)} >= min required {min_required}. Skipping further coverage downsampling.")
         return ref_obs, err
 
     # Compute how many more sats we need to prune
     sats_to_prune = target_required - len(low_coverage_sats)
     if sats_to_prune <= 0:
         return ref_obs, err
+    
+    logger.info(f"[DOWNSAMPLE-COV] Need to prune {sats_to_prune} more satellites to reach target {objp[2]:.2f} ({target_required} total).")
 
     # --------------------------------------------------------------------
     # Downsample to obtain required coverage
@@ -1005,7 +1025,7 @@ def _lowerOrbitCoverage(ref_obs, sat_params, objp, coveragep, rng, chosen_sats=N
 
     while len(successfully_pruned) < sats_to_prune:
         if not remaining_candidates:
-            print("Warning: Could not meet desired coverage reduction.")
+            logger.info("Warning: Could not meet desired coverage reduction.")
             err = 1
             break
 
@@ -1016,6 +1036,8 @@ def _lowerOrbitCoverage(ref_obs, sat_params, objp, coveragep, rng, chosen_sats=N
         if points[sat] is None or len(points[sat]) < 3:
             continue  # skip unusable satellites
 
+        current_cov = coverages[sat]
+        logger.info(f"[DOWNSAMPLE-COV] Attempting to prune satellite {sat} (Current Cov: {current_cov:.2f}, Target: {coveragep[0]:.2f})")
         sma = sat_params[sat]["Semi-Major Axis"]
         # Guard against invalid Semi-Major Axis values
         if not np.isfinite(sma) or sma <= 0:
@@ -1096,8 +1118,11 @@ def _lowerOrbitCoverage(ref_obs, sat_params, objp, coveragep, rng, chosen_sats=N
                 break  # no valid points left and already relaxed
 
         if area <= target_coverage_area and area >= min_coverage_area and remaining >= 3:
+            logger.info(f"[DOWNSAMPLE-COV] Successfully pruned satellite {sat} to coverage {area / max_area:.2f} ({total_removed} obs removed)")
             dropped_ids.extend(current_dropped)
             successfully_pruned.add(sat)
+        else:
+            logger.info(f"[DOWNSAMPLE-COV] Failed to prune satellite {sat} to target (Final Area: {area / max_area:.2f}, Remaining: {remaining})")
 
     # Use set for fast membership testing
     dropped_id_set = set(dropped_ids)
@@ -1185,9 +1210,12 @@ def _increaseTrackDistance(ref_obs, sat_params, objp, trackp, rng, chosen_sats=N
     total_sats = len(sufficient_sats) + len(insufficient_sats)
     min_required = int(np.ceil(objp[0] * total_sats))
     target_required = int(np.ceil(objp[2] * total_sats))
+    
+    logger.info(f"[DOWNSAMPLE-GAP] {len(sufficient_sats)}/{total_sats} satellites already meet gap threshold ({trackp:.2f}*P).")
 
     # Return early if meets min threshold
     if len(sufficient_sats) >= min_required:
+        logger.info(f"[DOWNSAMPLE-GAP] {len(sufficient_sats)} >= min required {min_required}. Skipping further gap widening.")
         return ref_obs, err
 
     # Determine how many additional satellites need gap widening
@@ -1195,6 +1223,8 @@ def _increaseTrackDistance(ref_obs, sat_params, objp, trackp, rng, chosen_sats=N
     if num_to_prune <= 0:
         return ref_obs, err
     num_to_prune = min(num_to_prune, len(insufficient_sats))  # Don't exceed available sats
+    
+    logger.info(f"[DOWNSAMPLE-GAP] Need to prune {num_to_prune} more satellites to reach target {objp[2]:.2f} ({target_required} total).")
 
     # --------------------------------------------------------------------
     # Prune observations for selected satellites to widen gaps
@@ -1214,8 +1244,9 @@ def _increaseTrackDistance(ref_obs, sat_params, objp, trackp, rng, chosen_sats=N
 
     while len(successfully_pruned) < num_to_prune:
         if not remaining_candidates:
-            print("Warning: Could not achieve desired number of satellites with widened gaps.")
+            logger.info("Warning: Could not achieve desired number of satellites with widened gaps.")
             err = 1
+            break
 
         # Pick the satellite with highest existing gap to try pruning
         sat = remaining_candidates.pop(0)
@@ -1223,11 +1254,16 @@ def _increaseTrackDistance(ref_obs, sat_params, objp, trackp, rng, chosen_sats=N
 
         # Get the target gap
         target_gap = gap_df.loc[sat, "target_gap"]
+        
+        logger.info(f"[DOWNSAMPLE-GAP] Attempting to widen gap for satellite {sat} (Current Gap: {gap_df.loc[sat, 'max_gap']}, Target: {target_gap})")
+        
         if pd.isna(target_gap) or len(sat_df) < 2:
+            logger.info(f"[DOWNSAMPLE-GAP] Skipping satellite {sat}: Insufficient observations ({len(sat_df)})")
             continue
 
         total_span = sat_df["obTime"].max() - sat_df["obTime"].min()
         if total_span < target_gap:
+            logger.info(f"[DOWNSAMPLE-GAP] Skipping satellite {sat}: Total span {total_span} < target gap {target_gap}")
             continue
 
         sorted_df = sat_df.sort_values("obTime").reset_index()
@@ -1570,6 +1606,46 @@ def apply_downsampling(
         "p_bounds": tier_cfg["obs"],
         "obs_max": config.max_obs_per_sat if config.max_obs_per_sat else tier_cfg["obs_max"],
     }
+
+    # explain per-satellite downsampling decisions before running
+    _obs_max = obs_count["obs_max"]
+    _gap_target = tier_cfg["gap_target"]      # in multiples of period
+    _cov_target = tier_cfg["coverage_pct"][0] # max coverage threshold (decimal)
+    _min_frac = tier_cfg["obs"][0]            # objp[0] – min fraction to trigger early exit
+    n_sats = len(sat_params)
+
+    logger.info("[DOWNSAMPLING] === Per-satellite pre-pass diagnostic ===")
+    logger.info(
+        f"[DOWNSAMPLING] Tier {tier}: obs_max={_obs_max}, gap_target={_gap_target}×P, "
+        f"coverage_threshold={_cov_target:.0%}, early-exit if ≥{_min_frac:.0%} of {n_sats} sats already meet each threshold"
+    )
+    abs_already_low = 0
+    gap_already_sufficient = 0
+    for _sat_id, _params in sat_params.items():
+        _live_n = int(obs_df["satNo"].eq(_sat_id).sum())
+        _period = _params.get("Period", 5400)
+        _max_gap_frac = _params.get("Max Track Gap", 0)
+        _max_gap_periods = _max_gap_frac  # already stored as fraction of period
+        _below_obs = _live_n <= _obs_max
+        _gap_ok = _max_gap_periods >= _gap_target
+        if _below_obs:
+            abs_already_low += 1
+        if _gap_ok:
+            gap_already_sufficient += 1
+        logger.info(
+            f"[DOWNSAMPLING]   sat {_sat_id}: obs={_live_n} ({'≤' if _below_obs else '>'}{_obs_max}), "
+            f"max_gap={_max_gap_periods:.2f}×P ({'≥' if _gap_ok else '<'}{_gap_target}×P target)"
+        )
+    _min_required = int(np.ceil(_min_frac * n_sats))
+    logger.info(
+        f"[DOWNSAMPLING] Absolute pass early-exit? {abs_already_low}/{n_sats} below obs_max "
+        f"({'WILL SKIP' if abs_already_low >= _min_required else 'will run'}, need <{_min_required} to run)"
+    )
+    logger.info(
+        f"[DOWNSAMPLING] Gap pass early-exit? {gap_already_sufficient}/{n_sats} meet gap target "
+        f"({'WILL SKIP' if gap_already_sufficient >= _min_required else 'will run'}, need <{_min_required} to run)"
+    )
+    logger.info("[DOWNSAMPLING] === End diagnostic ===")
 
     try:
         downsampled_df, p_reached = downsampleData(

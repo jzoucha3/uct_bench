@@ -17,3 +17,6 @@ reports/
 orekit-data-main/
 
 .DS_Store
+duckdb.exe
+
+docs/Benchmarking Documentation.docx.md
