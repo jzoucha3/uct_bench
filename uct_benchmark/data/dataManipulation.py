@@ -775,9 +775,11 @@ def _downsampleAbsolute(ref_obs, sat_params, objp, obs_max, rand, rng, chosen_sa
     # Sort obs for performance
     grouped_obs = {sat: df for sat, df in culled_obs.groupby("satNo", observed=True)}
 
-    # Determine observation counts for all sats
+    # Determine observation counts for all sats using live DataFrame counts so that
+    # observations removed by prior coverage/gap passes are reflected here.
+    live_counts = ref_obs.groupby("satNo", observed=True).size()
     sat_obs_counts = {
-        sat: elems["Number of Obs"]
+        sat: int(live_counts.get(sat, elems["Number of Obs"]))
         for sat, elems in sat_params.items()
         if np.isfinite(elems["Number of Obs"])
     }
@@ -1091,7 +1093,8 @@ def _lowerOrbitCoverage(ref_obs, sat_params, objp, coveragep, rng, chosen_sats=N
                     continue
                 projected_area = area - abs(neg_area)  # neg_area is negative
                 if projected_area < min_coverage_area:
-                    continue  # Skip this point, it would drop too far
+                    # Point would drop coverage too far
+                    continue
 
                 area -= abs(neg_area)
                 removed[i] = True
@@ -1527,6 +1530,14 @@ def apply_downsampling(
                 if line1 and line2:
                     orb_elems = orbit2OE(line1, line2)
                     sat_obs = obs_df[obs_df["satNo"] == sat_id]
+                    period = orb_elems.get("Period", 5400)
+                    if len(sat_obs) > 1:
+                        sorted_times = sat_obs["obTime"].sort_values()
+                        gaps = sorted_times.diff().dropna()
+                        max_gap_sec = gaps.max().total_seconds() if not gaps.empty else 0
+                        max_track_gap = max_gap_sec / period if period > 0 else 0
+                    else:
+                        max_track_gap = 0
                     sat_params[sat_id] = {
                         "Semi-Major Axis": orb_elems.get("Semi-Major Axis", 7000),
                         "Eccentricity": orb_elems.get("Eccentricity", 0.001),
@@ -1534,10 +1545,10 @@ def apply_downsampling(
                         "RAAN": orb_elems.get("RAAN", 0),
                         "Argument of Perigee": orb_elems.get("Argument of Perigee", 0),
                         "Mean Anomaly": orb_elems.get("Mean Anomaly", 0),
-                        "Period": orb_elems.get("Period", 5400),
+                        "Period": period,
                         "Number of Obs": len(sat_obs),
                         "Orbital Coverage": 0.5,
-                        "Max Track Gap": 2,
+                        "Max Track Gap": max_track_gap,
                     }
             except Exception as e:
                 logger.warning(f"Skipping satellite {sat_id}: {e}")
