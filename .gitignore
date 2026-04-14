@@ -2,6 +2,7 @@
 *.pyc
 __pycache__/
 .pytest_cache/
+.vscode
 
 frontend/node_modules/
 frontend/node_modules
@@ -16,3 +17,6 @@ reports/
 orekit-data-main/
 
 .DS_Store
+duckdb.exe
+
+docs/Benchmarking Documentation.docx.md

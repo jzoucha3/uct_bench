@@ -133,7 +133,7 @@ def main() -> int:
     parser.add_argument("--end-offset-days", type=int, default=1)
     parser.add_argument("--disable-range-filter", action="store_true", default=True)
     parser.add_argument("--allow-satno-fallback", action="store_true", default=True)
-    parser.add_argument("--enable-downsampling", action="store_true", default=False)
+    parser.add_argument("--enable-downsampling", action="store_true", default=True)
     parser.add_argument("--target-coverage", type=float, default=0.05)
     parser.add_argument("--target-gap", type=float, default=2.0)
     parser.add_argument("--max-obs-per-sat", type=int, default=30)
@@ -246,6 +246,29 @@ def main() -> int:
     print(f"Resolved strategy: {context.get('search_strategy_resolved')}")
     print(f"Observations: {observation_count}")
     print(f"Satellites returned: {satellite_count}")
+    
+    # Check downsampling
+    ds_metadata = performance.get("Downsampling Metadata")
+    if ds_metadata:
+        status = ds_metadata.get("status")
+        orig = ds_metadata.get("original_count", 0)
+        final = ds_metadata.get("final_count", 0)
+        retention = ds_metadata.get("retention_ratio", 0)
+        tier_used = ds_metadata.get("tier", config.get("tier", "?"))
+        p_reached = ds_metadata.get("p_reached", (None, None, None))
+        ds_cfg = ds_metadata.get("config", {})
+        print("Downsampling Summary:")
+        print(f"  Status:    {status}")
+        print(f"  Tier:      {tier_used}  (obs_max={ds_cfg.get('max_obs_per_sat')}, gap_target={ds_cfg.get('target_gap')}×P, coverage_target={ds_cfg.get('target_coverage')})")
+        print(f"  Obs count: {orig} → {final}  ({retention:.1%} retained)")
+        if p_reached and p_reached[0] is not None:
+            print(f"  p_reached: coverage={p_reached[0]}, gap={p_reached[1]}, obs_count={p_reached[2]}")
+        if status == "no_sat_params":
+            print("  WARNING: Downsampling was skipped — no satellite parameters available.")
+            print("           (statevector-first path: ensure elset_data is populated before calling apply_downsampling)")
+    else:
+        print("Downsampling: Not enabled or skipped.")
+
     print(f"Runtime window: {start.isoformat()} -> {end.isoformat()}")
 
     report = {

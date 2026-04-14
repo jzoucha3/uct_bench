@@ -138,6 +138,20 @@ def _build_obs_from_statevectors(state_df: pd.DataFrame) -> pd.DataFrame:
     if state_df is None or state_df.empty:
         return pd.DataFrame()
 
+    import numpy as np
+
+    # Compute geocentric RA/Dec from ECI position (xpos, ypos, zpos in km).
+    # This gives the direction from Earth's center to the satellite, which is
+    # what orbitCoverage expects. Without this, all observations get ra=0/dec=0
+    # and coverage computes as 0 for every satellite.
+    x = pd.to_numeric(state_df.get("xpos", 0), errors="coerce").fillna(0).to_numpy()
+    y = pd.to_numeric(state_df.get("ypos", 0), errors="coerce").fillna(0).to_numpy()
+    z = pd.to_numeric(state_df.get("zpos", 0), errors="coerce").fillna(0).to_numpy()
+    r = np.sqrt(x**2 + y**2 + z**2)
+    r_safe = np.where(r > 0, r, 1.0)  # avoid division by zero
+    ra_deg = np.degrees(np.arctan2(y, x)) % 360
+    dec_deg = np.degrees(np.arcsin(np.clip(z / r_safe, -1.0, 1.0)))
+
     obs_df = pd.DataFrame(
         {
             "satNo": pd.to_numeric(state_df["satNo"], errors="coerce"),
@@ -147,8 +161,8 @@ def _build_obs_from_statevectors(state_df: pd.DataFrame) -> pd.DataFrame:
             "senlat": 0.0,
             "senlon": 0.0,
             "senalt": 0.0,
-            "ra": 0.0,
-            "declination": 0.0,
+            "ra": ra_deg,
+            "declination": dec_deg,
             "range": 0.0,
             "range_km": 0.0,
             "range_rate_km_s": pd.NA,
@@ -159,6 +173,8 @@ def _build_obs_from_statevectors(state_df: pd.DataFrame) -> pd.DataFrame:
     )
     obs_df = obs_df.dropna(subset=["satNo", "obTime"]).reset_index(drop=True)
     obs_df["satNo"] = obs_df["satNo"].astype(int)
+    # Add an 'id' column which is expected by downstream operations like downsampling
+    obs_df["id"] = obs_df.index.astype(str)
     return obs_df
 
 
@@ -324,6 +340,8 @@ def execute_statevector_first_pipeline(
         report=inspection_report,
     )
 
+    elset_truth = _fetch_current_elsets(udl_token, sorted(obs_truth["satNo"].unique().tolist()), dt=dt)
+
     downsample_config, simulation_config = _build_tier_configs(
         tier=tier,
         downsampling=config.get("downsampling"),
@@ -342,7 +360,7 @@ def execute_statevector_first_pipeline(
         obs_truth, downsampling_metadata = apply_downsampling(
             obs_truth,
             sat_params={},
-            elset_data=None,
+            elset_data=elset_truth,
             config=ds_cfg,
             tier=tier,
         )
@@ -371,7 +389,6 @@ def execute_statevector_first_pipeline(
         sim_auto = True
 
     simulation_metadata = None
-    elset_truth = _fetch_current_elsets(udl_token, sorted(obs_truth["satNo"].unique().tolist()), dt=dt)
     if simulation_config and simulation_config.get("enabled"):
         sensor_df = pd.DataFrame(
             {
